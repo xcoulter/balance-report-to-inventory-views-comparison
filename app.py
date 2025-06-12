@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -15,23 +14,31 @@ def load_data(file):
 def normalize_ticker(ticker):
     return str(ticker).strip().upper()
 
+def safe_numeric(series):
+    return pd.to_numeric(series, errors='coerce').fillna(0)
+
 def compare_reports(balance_df, compare_df, mode="dashboard"):
     results = []
 
     balance_df['ticker'] = balance_df['ticker'].apply(normalize_ticker)
+    balance_df['value'] = safe_numeric(balance_df['value'])
+    balance_df['fiatValue'] = safe_numeric(balance_df['fiatValue'])
 
     if mode == "dashboard":
         compare_df['Asset'] = compare_df['Asset'].apply(normalize_ticker)
+        compare_df['Qty'] = safe_numeric(compare_df['Qty'])
+        compare_df['Fair Market Value'] = safe_numeric(compare_df['Fair Market Value'])
+
         merged = balance_df.merge(compare_df, how='outer', left_on='ticker', right_on='Asset', indicator=True)
         for _, row in merged.iterrows():
-            ticker = row['ticker'] or row['Asset']
+            ticker = row['ticker'] if pd.notnull(row['ticker']) else row['Asset']
             balance_qty = row.get('value', 0)
             dashboard_qty = row.get('Qty', 0)
             balance_fmv = row.get('fiatValue', 0)
             dashboard_fmv = row.get('Fair Market Value', 0)
 
-            qty_diff = abs(balance_qty - dashboard_qty) if pd.notnull(balance_qty) and pd.notnull(dashboard_qty) else "N/A"
-            fmv_diff = abs(balance_fmv - dashboard_fmv) if pd.notnull(balance_fmv) and pd.notnull(dashboard_fmv) else "N/A"
+            qty_diff = abs(balance_qty - dashboard_qty)
+            fmv_diff = abs(balance_fmv - dashboard_fmv)
 
             results.append({
                 "Ticker": ticker,
@@ -44,16 +51,19 @@ def compare_reports(balance_df, compare_df, mode="dashboard"):
             })
     else:  # rollforward
         compare_df['asset'] = compare_df['asset'].apply(normalize_ticker)
+        compare_df['ending_qty_value'] = safe_numeric(compare_df['ending_qty_value'])
+        compare_df['ending_fiat_value'] = safe_numeric(compare_df['ending_fiat_value'])
+
         merged = balance_df.merge(compare_df, how='outer', left_on='ticker', right_on='asset', indicator=True)
         for _, row in merged.iterrows():
-            ticker = row['ticker'] or row['asset']
+            ticker = row['ticker'] if pd.notnull(row['ticker']) else row['asset']
             balance_qty = row.get('value', 0)
             rollforward_qty = row.get('ending_qty_value', 0)
             balance_fmv = row.get('fiatValue', 0)
             rollforward_fmv = row.get('ending_fiat_value', 0)
 
-            qty_diff = abs(balance_qty - rollforward_qty) if pd.notnull(balance_qty) and pd.notnull(rollforward_qty) else "N/A"
-            fmv_diff = abs(balance_fmv - rollforward_fmv) if pd.notnull(balance_fmv) and pd.notnull(rollforward_fmv) else "N/A"
+            qty_diff = abs(balance_qty - rollforward_qty)
+            fmv_diff = abs(balance_fmv - rollforward_fmv)
 
             results.append({
                 "Ticker": ticker,
